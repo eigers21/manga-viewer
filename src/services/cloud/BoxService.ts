@@ -152,8 +152,29 @@ export class BoxService implements CloudService {
             return await response.blob();
         }
 
-        // 本番環境: Box APIに直接リクエスト
+        // 本番環境: まずファイル情報を取得して権限を確認
         try {
+            // ファイルメタデータ（permissions含む）を取得
+            const infoRes = await fetch(`${BOX_API}/files/${fileId}?fields=permissions,name`, {
+                headers: { Authorization: `Bearer ${this.tokenData.access_token}` },
+            });
+
+            if (infoRes.ok) {
+                const fileInfo = await infoRes.json();
+                console.log('File info:', fileInfo);
+                const perms = fileInfo.permissions;
+                if (perms && !perms.can_download) {
+                    throw new Error(
+                        `ファイル「${fileInfo.name}」のダウンロード権限がありません。\n` +
+                        `権限情報: ${JSON.stringify(perms, null, 2)}\n\n` +
+                        `Box Developer Console → 構成 → アプリケーションスコープで\n` +
+                        `「コンテンツのダウンロード」を有効にしてから、\n` +
+                        `再度ログアウト→ログインしてください。`
+                    );
+                }
+            }
+
+            // ダウンロード実行
             const response = await fetch(`${BOX_API}/files/${fileId}/content`, {
                 headers: { Authorization: `Bearer ${this.tokenData.access_token}` },
             });
