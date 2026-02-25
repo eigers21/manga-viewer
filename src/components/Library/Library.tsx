@@ -118,7 +118,8 @@ export const Library: React.FC = () => {
                 navigate('/viewer');
             } catch (e) {
                 console.error('BOXダウンロード失敗:', e);
-                alert('ファイルのダウンロードに失敗しました');
+                const msg = (e instanceof Error) ? e.message : String(e);
+                alert(`ダウンロードエラー:\n${msg}`);
             } finally {
                 setLoadingBox(false);
             }
