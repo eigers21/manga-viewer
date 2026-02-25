@@ -15,6 +15,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: () => '/oauth2/token',
       },
+      // Box ファイルダウンロード用プロキシ（開発時のみ使用）
+      '/api/box/download': {
+        target: 'https://api.box.com',
+        changeOrigin: true,
+        rewrite: (path: string) => `/2.0/files/${path.split('/').pop()}/content`,
+      },
     },
   },
 })
