@@ -169,7 +169,7 @@ export class BoxService implements CloudService {
 
             const errorBody = await response.text().catch(() => 'Unknown error');
             console.error(`Box download error: ${response.status}`, errorBody);
-            throw new Error(`Download failed: ${response.status}`);
+            throw new Error(`Download failed (${response.status}): ${errorBody}`);
         } catch (error) {
             // CORSエラーの場合はTypeErrorになる — XMLHttpRequestで再試行
             if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
