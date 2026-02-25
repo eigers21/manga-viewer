@@ -1,4 +1,4 @@
-import type { CloudService } from './CloudService';
+import type { CloudService, ProgressCallback } from './CloudService';
 import type { LibraryItem } from '../../types';
 import { generateVerifier, generateChallenge } from '../../utils/pkce';
 
@@ -95,7 +95,7 @@ export class GoogleDriveService implements CloudService {
         }));
     }
 
-    async downloadFile(fileId: string): Promise<Blob> {
+    async downloadFile(fileId: string, _onProgress?: ProgressCallback): Promise<Blob> {
         if (!this.accessToken) throw new Error('Not authenticated');
 
         const response = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {

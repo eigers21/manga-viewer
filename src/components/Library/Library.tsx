@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store/useStore';
 import { googleDriveService } from '../../services/cloud/GoogleDriveService';
 import { boxService } from '../../services/cloud/BoxService';
+import { cacheService } from '../../services/cache/CacheService';
 import type { LibraryItem } from '../../types';
 import './Library.css';
 
@@ -14,7 +15,8 @@ interface BreadcrumbItem {
 
 export const Library: React.FC = () => {
     const navigate = useNavigate();
-    const { loadFile, isLoading, error } = useStore();
+    const { loadFile, isLoading, error, downloadProgress, setDownloadProgress, setCurrentFileId } = useStore();
+    const [cacheUsageMB, setCacheUsageMB] = useState(0);
 
     // Google Drive 状態
     const [cloudFiles, setCloudFiles] = useState<LibraryItem[]>([]);
@@ -40,6 +42,8 @@ export const Library: React.FC = () => {
             setIsBoxAuth(true);
             fetchBoxFiles('0');
         }
+        // キャッシュ使用量を取得
+        cacheService.getUsageMB().then(mb => setCacheUsageMB(mb));
     }, []);
 
     // --- Google Drive ---
@@ -106,14 +110,20 @@ export const Library: React.FC = () => {
 
     const handleBoxItemClick = async (item: LibraryItem) => {
         if (item.type === 'folder') {
-            // フォルダの場合はナビゲーション
             setBoxBreadcrumbs(prev => [...prev, { id: item.id, name: item.name }]);
             await fetchBoxFiles(item.id);
         } else {
-            // ファイルの場合はダウンロードして閲覧
             setLoadingBox(true);
+            setDownloadProgress(0);
             try {
-                const blob = await boxService.downloadFile(item.id);
+                const blob = await boxService.downloadFile(item.id, (loaded, total) => {
+                    const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                    setDownloadProgress(pct);
+                });
+                setDownloadProgress(100);
+                setCurrentFileId(item.id);
+                // キャッシュに登録（上限超えならスキップ）
+                await cacheService.registerFile(item.id, item.name, 0, blob.size);
                 await loadFile(blob);
                 navigate('/viewer');
             } catch (e) {
@@ -122,6 +132,7 @@ export const Library: React.FC = () => {
                 alert(`ダウンロードエラー:\n${msg}`);
             } finally {
                 setLoadingBox(false);
+                setDownloadProgress(-1);
             }
         }
     };
@@ -143,6 +154,12 @@ export const Library: React.FC = () => {
         return '📎';
     };
 
+    const handleClearCache = async () => {
+        await cacheService.clearAll();
+        setCacheUsageMB(0);
+        alert('キャッシュをクリアしました');
+    };
+
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
@@ -156,7 +173,25 @@ export const Library: React.FC = () => {
             <div className="library-header">
                 <h1>Manga Reader</h1>
                 <p>Simple, fast, and private manga viewer.</p>
+                {cacheUsageMB > 0 && (
+                    <div className="cache-info">
+                        <span>📦 キャッシュ: {cacheUsageMB.toFixed(1)}MB / 500MB</span>
+                        <button className="cache-clear-btn" onClick={handleClearCache}>クリア</button>
+                    </div>
+                )}
             </div>
+
+            {/* ダウンロード進捗バー */}
+            {downloadProgress >= 0 && (
+                <div className="download-progress-container">
+                    <div className="download-progress-bar">
+                        <div className="download-progress-fill" style={{ width: `${downloadProgress}%` }} />
+                    </div>
+                    <span className="download-progress-text">
+                        {downloadProgress < 100 ? `ダウンロード中... ${downloadProgress}%` : '展開中...'}
+                    </span>
+                </div>
+            )}
 
             {error && (
                 <div style={{ color: '#ff6b6b', background: 'rgba(255, 0, 0, 0.1)', padding: '10px 20px', borderRadius: '8px' }}>

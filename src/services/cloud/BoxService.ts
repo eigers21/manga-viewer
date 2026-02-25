@@ -1,4 +1,4 @@
-import type { CloudService } from './CloudService';
+import type { CloudService, ProgressCallback } from './CloudService';
 import type { LibraryItem } from '../../types';
 
 // Box OAuth2 設定
@@ -7,12 +7,10 @@ const BOX_CLIENT_SECRET = import.meta.env.VITE_BOX_CLIENT_SECRET || '';
 const BASE_PATH = import.meta.env.BASE_URL || '/';
 const REDIRECT_URI = window.location.origin + BASE_PATH + 'oauth/callback/box';
 const AUTH_ENDPOINT = 'https://account.box.com/api/oauth2/authorize';
-// 開発時はViteプロキシ経由、本番はBox APIに直接リクエスト
 const IS_DEV = import.meta.env.DEV;
 const TOKEN_ENDPOINT = IS_DEV ? '/api/box/token' : 'https://api.box.com/oauth2/token';
 const BOX_API = 'https://api.box.com/2.0';
 
-// トークン有効期限（Box は約60分）
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
 interface BoxTokenData {
@@ -26,7 +24,6 @@ export class BoxService implements CloudService {
     private tokenData: BoxTokenData | null = null;
 
     constructor() {
-        // ローカルストレージからトークン復元
         const stored = localStorage.getItem('box_token_data');
         if (stored) {
             try {
@@ -37,7 +34,6 @@ export class BoxService implements CloudService {
         }
     }
 
-    /** Box OAuth2 認証ページにリダイレクト */
     async login(): Promise<void> {
         const params = new URLSearchParams({
             client_id: BOX_CLIENT_ID,
@@ -47,7 +43,6 @@ export class BoxService implements CloudService {
         window.location.href = `${AUTH_ENDPOINT}?${params.toString()}`;
     }
 
-    /** 認証コールバック処理。認証コードをアクセストークンに交換 */
     async handleCallback(code: string): Promise<void> {
         const params = new URLSearchParams({
             grant_type: 'authorization_code',
@@ -73,7 +68,6 @@ export class BoxService implements CloudService {
         this.saveTokenData(data);
     }
 
-    /** フォルダ内のファイル一覧を取得 */
     async listFiles(folderId: string = '0'): Promise<LibraryItem[]> {
         await this.ensureValidToken();
         if (!this.tokenData) throw new Error('Not authenticated');
@@ -122,7 +116,6 @@ export class BoxService implements CloudService {
             }
         }
 
-        // フォルダを先、ファイルを後に並び替え
         items.sort((a, b) => {
             if (a.type === 'folder' && b.type !== 'folder') return -1;
             if (a.type !== 'folder' && b.type === 'folder') return 1;
@@ -134,80 +127,73 @@ export class BoxService implements CloudService {
 
     /**
      * ファイルをダウンロードしてBlobとして返す。
-     * Box APIのdownloadエンドポイントは302リダイレクトを返すため、
-     * CORS問題を回避するために複数の手段を試行する。
+     * 進捗コールバックでダウンロード進捗を報告する。
      */
-    async downloadFile(fileId: string): Promise<Blob> {
+    async downloadFile(fileId: string, onProgress?: ProgressCallback): Promise<Blob> {
         await this.ensureValidToken();
         if (!this.tokenData) throw new Error('Not authenticated');
 
-        // 開発時はViteプロキシ経由でダウンロード
-        if (IS_DEV) {
-            const response = await fetch(`/api/box/download/${fileId}`, {
-                headers: { Authorization: `Bearer ${this.tokenData.access_token}` },
-            });
-            if (!response.ok) {
-                throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-            }
-            return await response.blob();
-        }
+        const url = IS_DEV
+            ? `/api/box/download/${fileId}`
+            : `${BOX_API}/files/${fileId}/content`;
 
-        // 本番環境: まずファイル情報を取得して権限を確認
         try {
-            // ファイルメタデータ（permissions含む）を取得
-            const infoRes = await fetch(`${BOX_API}/files/${fileId}?fields=permissions,name`, {
+            const response = await fetch(url, {
                 headers: { Authorization: `Bearer ${this.tokenData.access_token}` },
             });
 
-            if (infoRes.ok) {
-                const fileInfo = await infoRes.json();
-                console.log('File info:', fileInfo);
-                const perms = fileInfo.permissions;
-                if (perms && !perms.can_download) {
-                    throw new Error(
-                        `ファイル「${fileInfo.name}」のダウンロード権限がありません。\n` +
-                        `権限情報: ${JSON.stringify(perms, null, 2)}\n\n` +
-                        `Box Developer Console → 構成 → アプリケーションスコープで\n` +
-                        `「コンテンツのダウンロード」を有効にしてから、\n` +
-                        `再度ログアウト→ログインしてください。`
-                    );
+            if (!response.ok) {
+                if (response.status === 401) {
+                    await this.logout();
+                    throw new Error('Session expired');
                 }
+                const errorBody = await response.text().catch(() => 'Unknown error');
+                console.error(`Box download error: ${response.status}`, errorBody);
+                throw new Error(`Download failed (${response.status}): ${errorBody}`);
             }
 
-            // ダウンロード実行
-            const response = await fetch(`${BOX_API}/files/${fileId}/content`, {
-                headers: { Authorization: `Bearer ${this.tokenData.access_token}` },
-            });
+            // 進捗コールバックがあればReadableStreamで追跡
+            if (onProgress && response.body) {
+                const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+                const reader = response.body.getReader();
+                const chunks: Uint8Array[] = [];
+                let loaded = 0;
 
-            if (response.ok) {
-                return await response.blob();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    loaded += value.length;
+                    onProgress(loaded, contentLength || loaded);
+                }
+
+                const blob = new Blob(chunks as BlobPart[]);
+                return blob;
             }
 
-            if (response.status === 401) {
-                await this.logout();
-                throw new Error('Session expired');
-            }
-
-            const errorBody = await response.text().catch(() => 'Unknown error');
-            console.error(`Box download error: ${response.status}`, errorBody);
-            throw new Error(`Download failed (${response.status}): ${errorBody}`);
+            return await response.blob();
         } catch (error) {
-            // CORSエラーの場合はTypeErrorになる — XMLHttpRequestで再試行
             if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
                 console.warn('CORS error detected, trying XMLHttpRequest...');
-                return await this.downloadWithXHR(fileId);
+                return await this.downloadWithXHR(fileId, onProgress);
             }
             throw error;
         }
     }
 
     /** XMLHttpRequestでファイルをダウンロード（CORSフォールバック） */
-    private downloadWithXHR(fileId: string): Promise<Blob> {
+    private downloadWithXHR(fileId: string, onProgress?: ProgressCallback): Promise<Blob> {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('GET', `${BOX_API}/files/${fileId}/content`, true);
             xhr.responseType = 'blob';
             xhr.setRequestHeader('Authorization', `Bearer ${this.tokenData!.access_token}`);
+
+            if (onProgress) {
+                xhr.onprogress = (e) => {
+                    onProgress(e.loaded, e.total || e.loaded);
+                };
+            }
 
             xhr.onload = () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
@@ -221,11 +207,9 @@ export class BoxService implements CloudService {
             };
 
             xhr.onerror = () => {
-                console.error('XHR download failed. Box Developer ConsoleでCORSドメインを確認してください。');
                 reject(new Error(
                     'ダウンロードに失敗しました。\n' +
-                    'Box Developer Console → 構成 → CORSドメイン に\n' +
-                    'https://eigers21.github.io を追加してください。'
+                    'Box Developer Console → CORSドメインを確認してください。'
                 ));
             };
 
@@ -242,7 +226,6 @@ export class BoxService implements CloudService {
         localStorage.removeItem('box_token_data');
     }
 
-    /** トークンが期限切れの場合、リフレッシュトークンで更新 */
     private async ensureValidToken(): Promise<void> {
         if (!this.tokenData) return;
         if (Date.now() >= this.tokenData.expires_at - TOKEN_EXPIRY_BUFFER_MS) {
@@ -250,7 +233,6 @@ export class BoxService implements CloudService {
         }
     }
 
-    /** リフレッシュトークンでアクセストークンを更新 */
     private async refreshToken(): Promise<void> {
         if (!this.tokenData?.refresh_token) {
             await this.logout();
@@ -279,7 +261,6 @@ export class BoxService implements CloudService {
         this.saveTokenData(data);
     }
 
-    /** トークンデータを保存 */
     private saveTokenData(data: { access_token: string; refresh_token: string; expires_in: number }): void {
         this.tokenData = {
             access_token: data.access_token,

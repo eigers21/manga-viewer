@@ -8,6 +8,10 @@ interface ViewerState {
     isLoading: boolean;
     error: string | null;
     pageUrls: Record<number, string>;
+    /** ダウンロード進捗（0〜100、-1は非表示） */
+    downloadProgress: number;
+    /** 現在開いているファイルのID（キャッシュ用） */
+    currentFileId: string | null;
 
     // Actions
     loadFile: (file: Blob) => Promise<void>;
@@ -17,6 +21,8 @@ interface ViewerState {
     prevPage: () => void;
     setPageUrl: (index: number, url: string) => void;
     cleanupOldPages: (currentIndex: number, distance: number) => void;
+    setDownloadProgress: (progress: number) => void;
+    setCurrentFileId: (id: string | null) => void;
 }
 
 export const useStore = create<ViewerState>((set, get) => ({
@@ -25,9 +31,11 @@ export const useStore = create<ViewerState>((set, get) => ({
     isLoading: false,
     error: null,
     pageUrls: {},
+    downloadProgress: -1,
+    currentFileId: null,
 
     loadFile: async (file: Blob) => {
-        // Revoke old urls
+        // 古いURLを解放
         const { pageUrls } = get();
         Object.values(pageUrls).forEach(url => URL.revokeObjectURL(url));
 
@@ -52,7 +60,14 @@ export const useStore = create<ViewerState>((set, get) => ({
         Object.values(pageUrls).forEach(url => URL.revokeObjectURL(url));
 
         zipLoader.unload();
-        set({ file: null, currentPageIndex: 0, error: null, pageUrls: {} });
+        set({
+            file: null,
+            currentPageIndex: 0,
+            error: null,
+            pageUrls: {},
+            downloadProgress: -1,
+            currentFileId: null,
+        });
     },
 
     setPage: (index: number) => {
@@ -96,5 +111,13 @@ export const useStore = create<ViewerState>((set, get) => ({
             });
             return changed ? { pageUrls: newUrls } : {};
         });
-    }
+    },
+
+    setDownloadProgress: (progress: number) => {
+        set({ downloadProgress: progress });
+    },
+
+    setCurrentFileId: (id: string | null) => {
+        set({ currentFileId: id });
+    },
 }));
