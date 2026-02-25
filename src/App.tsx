@@ -4,9 +4,12 @@ import { OAuthCallback } from './components/Auth/OAuthCallback';
 import { Library } from './components/Library/Library';
 import { Viewer } from './components/Viewer/Viewer';
 
+// GitHub Pages用: Viteのbase pathからbasenameを取得
+const basename = import.meta.env.BASE_URL || '/';
+
 function App() {
   return (
-    <Router>
+    <Router basename={basename}>
       <div className="app-container">
         <Routes>
           <Route path="/" element={<Library />} />
