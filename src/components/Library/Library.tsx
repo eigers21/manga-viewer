@@ -301,13 +301,13 @@ export const Library: React.FC = () => {
                     <div className="file-input-wrapper">
                         <div className="icon-placeholder">📂</div>
                         <h3>Open Local File</h3>
-                        <p>Select .zip or .cbz file from device</p>
+                        <p>Select .zip, .cbz, or .pdf file from device</p>
                         <button className="action-button">
                             {isLoading ? 'Loading...' : 'Choose File'}
                         </button>
                         <input
                             type="file"
-                            accept=".zip,.cbz"
+                            accept=".zip,.cbz,.pdf"
                             onChange={handleFileChange}
                             className="hidden-input"
                             disabled={isLoading || loadingCloud || loadingBox}

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { MangaFile } from '../types';
-import { zipLoader } from '../services/archive/ZipLoader';
+import { fileLoader } from '../services/archive/FileLoader';
 
 interface ViewerState {
     file: MangaFile | null;
@@ -45,7 +45,7 @@ export const useStore = create<ViewerState>((set, get) => ({
 
         set({ isLoading: true, error: null, pageUrls: {} });
         try {
-            const mangaFile = await zipLoader.loadFile(file);
+            const mangaFile = await fileLoader.loadFile(file, currentFileId || undefined);
 
             // 栞（しおり）機能：保存されたページインデックスを復元
             const fileKey = currentFileId || mangaFile.fileName;
@@ -77,7 +77,7 @@ export const useStore = create<ViewerState>((set, get) => ({
         const { pageUrls } = get();
         Object.values(pageUrls).forEach(url => URL.revokeObjectURL(url));
 
-        zipLoader.unload();
+        fileLoader.unload();
         set({
             file: null,
             currentPageIndex: 0,

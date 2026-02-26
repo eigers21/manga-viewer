@@ -65,7 +65,7 @@ export class GoogleDriveService implements CloudService {
     async listFiles(folderId: string = 'root'): Promise<LibraryItem[]> {
         if (!this.accessToken) throw new Error('Not authenticated');
 
-        const q = `'${folderId}' in parents and (mimeType = 'application/zip' or mimeType = 'application/x-cbz' or name contains '.zip' or name contains '.cbz') and trashed = false`;
+        const q = `'${folderId}' in parents and (mimeType = 'application/zip' or mimeType = 'application/x-cbz' or mimeType = 'application/pdf' or name contains '.zip' or name contains '.cbz' or name contains '.pdf') and trashed = false`;
         const params = new URLSearchParams({
             q,
             fields: 'files(id, name, mimeType, modifiedTime, thumbnailLink)',

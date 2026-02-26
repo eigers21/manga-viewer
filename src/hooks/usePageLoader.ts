@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { zipLoader } from '../services/archive/ZipLoader';
+import { fileLoader } from '../services/archive/FileLoader';
 import { cacheService } from '../services/cache/CacheService';
 
 const BASE_PREFETCH_RANGE = 2; // 先読み/後読みページ数
@@ -27,8 +27,8 @@ export const usePageLoader = () => {
                     }
                 }
 
-                // キャッシュになければZipLoaderから展開
-                const url = await zipLoader.getPage(index);
+                // キャッシュになければFileLoaderから展開
+                const url = await fileLoader.getPage(index);
                 setPageUrl(index, url);
 
                 // キャッシュに保存（バックグラウンド）
