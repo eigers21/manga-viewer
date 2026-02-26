@@ -10,6 +10,10 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
+}
+
+/* Horizontal Mode (横読みモード時のみ、スワイプ操作のためブラウザの默认スクロールを無効化する) */
+.viewer-container:not(.vertical-mode) {
     touch-action: none;
 }
 
@@ -96,14 +100,16 @@
     max-width: 800px;
     display: flex;
     justify-content: center;
-    min-height: 50vh; /* 高さ0によるカクつきを防ぐ */
+    min-height: 50vh;
+    /* 高さ0によるカクつきを防ぐ */
 }
 
 .vertical-page-image {
     max-width: 100%;
     height: auto;
     object-fit: contain;
-    display: block; /* 余白排除 */
+    display: block;
+    /* 余白排除 */
 }
 
 .vertical-page-placeholder {

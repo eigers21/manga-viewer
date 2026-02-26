@@ -86,19 +86,20 @@ export const Viewer: React.FC = () => {
         closeFile();
     };
 
-    if (!file) return null;
-
-    const currentUrl = pageUrls[currentPageIndex];
-
     // 初回マウント時やモード変更時に、現在のページへスクロールさせる処理
     useEffect(() => {
+        if (!file) return;
         if (viewMode === 'vertical') {
             const el = document.getElementById(`vertical-page-${currentPageIndex}`);
             if (el) {
                 el.scrollIntoView({ behavior: 'auto', block: 'start' });
             }
         }
-    }, [viewMode]); // 最初の切り替え時だけ
+    }, [viewMode, file]); // 最初の切り替え時だけ
+
+    if (!file) return null;
+
+    const currentUrl = pageUrls[currentPageIndex];
 
     return (
         <div className={`viewer-container ${viewMode === 'vertical' ? 'vertical-mode' : ''}`} {...(viewMode === 'horizontal' ? bind() : {})} onClick={handleZoneClick}>
