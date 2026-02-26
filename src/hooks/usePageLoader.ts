@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { fileLoader } from '../services/archive/FileLoader';
 
@@ -7,21 +7,27 @@ const BASE_CLEANUP_DISTANCE = 5; // メモリに保持する距離
 
 export const usePageLoader = () => {
     const { file, currentPageIndex, pageUrls, setPageUrl, cleanupOldPages, currentFileId, viewMode } = useStore();
+    const fetchingPages = useRef<Set<number>>(new Set());
 
     useEffect(() => {
-        if (!file) return;
+        if (!file) {
+            fetchingPages.current.clear();
+            return;
+        }
 
         const loadPage = async (index: number) => {
             if (index < 0 || index >= file.totalPages) return;
-            if (pageUrls[index]) return; // 読み込み済み
+            // すでに読み込み済み、または現在取得中の場合は重複してフェッチしない
+            if (pageUrls[index] || fetchingPages.current.has(index)) return;
 
+            fetchingPages.current.add(index);
             try {
-                // キャッシュの仕組みは FileLoader より上でファイル丸ごと持つ形になったため、
-                // ここでは単純に fileLoader からページ（BlobURL）をもらうだけでOK
                 const url = await fileLoader.getPage(index);
                 setPageUrl(index, url);
             } catch (error) {
                 console.error(`ページ ${index} の読み込み失敗`, error);
+            } finally {
+                fetchingPages.current.delete(index);
             }
         };
 

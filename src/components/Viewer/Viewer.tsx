@@ -58,17 +58,33 @@ const VerticalPage: React.FC<{ index: number; url?: string; setPage: (idx: numbe
 
 export const Viewer: React.FC = () => {
     const navigate = useNavigate();
-    const { file, currentPageIndex, pageUrls, nextPage, prevPage, closeFile, viewMode, setViewMode, setPage } = useStore();
+    const { file, currentPageIndex, pageUrls, nextPage, prevPage, closeFile, viewMode, setViewMode, setPage, isLoading } = useStore();
+
+    // UI Overlay state
+    const [showUI, setShowUI] = React.useState(false);
+
+    // Fade out UI initially after loaded
+    useEffect(() => {
+        if (file) {
+            setShowUI(true);
+            const timer = setTimeout(() => setShowUI(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [file]);
+
+    const toggleUI = React.useCallback(() => {
+        setShowUI(prev => !prev);
+    }, []);
 
     // Activate pre-fetching
     usePageLoader();
 
     // Redirect if no file loaded
     useEffect(() => {
-        if (!file) {
+        if (!file && !isLoading) {
             navigate('/');
         }
-    }, [file, navigate]);
+    }, [file, isLoading, navigate]);
 
     // Gestures (横読みモードのみ)
     const bind = useDrag(({ swipe: [swipeX] }) => {
@@ -85,17 +101,24 @@ export const Viewer: React.FC = () => {
     });
 
     const handleZoneClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (viewMode === 'vertical') return;
+        if (viewMode === 'vertical') {
+            toggleUI();
+            return;
+        }
 
         const width = e.currentTarget.clientWidth;
         const x = e.clientX;
 
+        // Middle 40% -> Toggle UI
+        if (x >= width * 0.3 && x <= width * 0.7) {
+            toggleUI();
+        } 
         // Left 30% -> Next
-        if (x < width * 0.3) {
+        else if (x < width * 0.3) {
             nextPage();
         }
         // Right 30% -> Prev
-        else if (x > width * 0.7) {
+        else {
             prevPage();
         }
     };
@@ -121,21 +144,34 @@ export const Viewer: React.FC = () => {
         }
     }, [viewMode, file]); // 最初の切り替え時だけ
 
-    if (!file) return null;
+    if (!file) {
+        if (isLoading) {
+            return (
+                <div className="viewer-container" style={{justifyContent: 'center', alignItems: 'center'}}>
+                    <div className="loading-spinner" style={{ border: '4px solid rgba(255,255,255,0.1)', borderTopColor: '#0061d5', borderRadius: '50%', width: 40, height: 40, animation: 'spin 1s linear infinite' }}></div>
+                    <p style={{ color: '#fff', marginTop: 20, fontSize: '1rem' }}>Extracting and Opening File...</p>
+                </div>
+            );
+        }
+        return null;
+    }
 
     const currentUrl = pageUrls[currentPageIndex];
 
     return (
         <div className={`viewer-container ${viewMode === 'vertical' ? 'vertical-mode' : ''}`} {...(viewMode === 'horizontal' ? bind() : {})} onClick={handleZoneClick}>
-            <div className="viewer-controls">
-                <button className="mode-toggle-button" onClick={toggleViewMode} title="表示モード切替">
-                    {viewMode === 'vertical' ? '横スクロール' : '縦スクロール'}
-                </button>
-                <button className="close-button" onClick={handleClose}>×</button>
-            </div>
+            
+            <div className={`viewer-ui-overlay ${showUI ? 'visible' : ''}`}>
+                <div className="viewer-controls">
+                    <button className="mode-toggle-button" onClick={toggleViewMode} title="表示モード切替">
+                        {viewMode === 'vertical' ? '横スクロール' : '縦スクロール'}
+                    </button>
+                    <button className="close-button" onClick={handleClose}>×</button>
+                </div>
 
-            <div className="page-info">
-                {file.fileName} - {currentPageIndex + 1} / {file.totalPages}
+                <div className="page-info">
+                    {file.fileName} - {currentPageIndex + 1} / {file.totalPages}
+                </div>
             </div>
 
             {viewMode === 'horizontal' ? (
