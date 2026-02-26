@@ -62,10 +62,15 @@ export const Viewer: React.FC = () => {
 
     // UI Overlay state
     const [showUI, setShowUI] = React.useState(false);
+    
+    // We want to force the loading spinner to show immediately and not redirect back
+    // if the store is still processing the loadFile async call.
+    const [isOpening, setIsOpening] = React.useState(true);
 
     // Fade out UI initially after loaded
     useEffect(() => {
         if (file) {
+            setIsOpening(false);
             setShowUI(true);
             const timer = setTimeout(() => setShowUI(false), 2000);
             return () => clearTimeout(timer);
@@ -79,10 +84,15 @@ export const Viewer: React.FC = () => {
     // Activate pre-fetching
     usePageLoader();
 
-    // Redirect if no file loaded
+    // Redirect if no file loaded and we're definitely not opening or loading
     useEffect(() => {
         if (!file && !isLoading) {
-            navigate('/');
+            // Give it a tiny delay to ensure we don't flash back to home instantly
+            // if store takes a split second to set isLoading=true
+            const t = setTimeout(() => {
+                navigate('/');
+            }, 100);
+            return () => clearTimeout(t);
         }
     }, [file, isLoading, navigate]);
 
@@ -144,16 +154,13 @@ export const Viewer: React.FC = () => {
         }
     }, [viewMode, file]); // 最初の切り替え時だけ
 
-    if (!file) {
-        if (isLoading) {
-            return (
-                <div className="viewer-container" style={{justifyContent: 'center', alignItems: 'center'}}>
-                    <div className="loading-spinner" style={{ border: '4px solid rgba(255,255,255,0.1)', borderTopColor: '#0061d5', borderRadius: '50%', width: 40, height: 40, animation: 'spin 1s linear infinite' }}></div>
-                    <p style={{ color: '#fff', marginTop: 20, fontSize: '1rem' }}>Extracting and Opening File...</p>
-                </div>
-            );
-        }
-        return null;
+    if (!file || isOpening) {
+        return (
+            <div className="viewer-container" style={{justifyContent: 'center', alignItems: 'center'}}>
+                <div className="loading-spinner" style={{ border: '4px solid rgba(255,255,255,0.1)', borderTopColor: '#0061d5', borderRadius: '50%', width: 40, height: 40, animation: 'spin 1s linear infinite' }}></div>
+                <p style={{ color: '#fff', marginTop: 20, fontSize: '1rem' }}>Extracting and Opening File...</p>
+            </div>
+        );
     }
 
     const currentUrl = pageUrls[currentPageIndex];
