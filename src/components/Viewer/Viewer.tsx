@@ -108,6 +108,7 @@ export const Viewer: React.FC = () => {
     });
 
     // ==== Auto-Scroll Feature States & Refs ====
+    const scrollWrapperRef = React.useRef<HTMLDivElement>(null);
     const [isAutoScrolling, setIsAutoScrolling] = React.useState(false);
     const [scrollAnchor, setScrollAnchor] = React.useState<{ x: number; y: number } | null>(null);
     const autoScrollRef = React.useRef({
@@ -132,7 +133,7 @@ export const Viewer: React.FC = () => {
             const speed = (dy - (dy > 0 ? 20 : -20)) * 0.15;
             
             // 縦スクロール用のコンテナを取得してスクロール
-            const container = document.querySelector('.vertical-scroll-wrapper') as HTMLElement;
+            const container = scrollWrapperRef.current;
             if (container) {
                 container.scrollBy({ top: speed, behavior: 'auto' });
             }
@@ -156,14 +157,20 @@ export const Viewer: React.FC = () => {
         // 左クリックまたは通常タッチ以外は無視
         if (e.pointerType === 'mouse' && e.button !== 0) return;
 
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
         const state = autoScrollRef.current;
+        if (state.timer) clearTimeout(state.timer);
+        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+        
         state.didMoveFar = false;
+        state.isScrolling = false;
         state.anchor = { x: e.clientX, y: e.clientY };
         state.currentY = e.clientY;
 
         // 500ms 後に長押し判定
         state.timer = setTimeout(() => {
-            if (!state.didMoveFar) {
+            if (!state.didMoveFar && state.anchor) {
                 state.isScrolling = true;
                 setIsAutoScrolling(true);
                 setScrollAnchor(state.anchor);
@@ -191,7 +198,12 @@ export const Viewer: React.FC = () => {
         }
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (e: React.PointerEvent) => {
+        try {
+            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+            // ignore error
+        }
         stopAutoScroll();
     };
 
@@ -309,6 +321,7 @@ export const Viewer: React.FC = () => {
                 </div>
             ) : (
                 <div 
+                    ref={scrollWrapperRef}
                     className="vertical-scroll-wrapper"
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
