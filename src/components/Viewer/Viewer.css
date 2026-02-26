@@ -141,3 +141,39 @@
     color: rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.02);
 }
+/* Auto-Scroll Anchor UI */
+.auto-scroll-anchor {
+    position: fixed;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    transform: translate(-50%, -50%); /* 中心をマウスポインタの座標に合わせる */
+    pointer-events: none;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    animation: fadeInAnchor 0.2s ease-out;
+}
+
+.auto-scroll-anchor-inner {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: white;
+}
+
+@keyframes fadeInAnchor {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* スクロール発動中はユーザー選択やデフォルトのドラッグ挙動を無効化する */
+.viewer-container.auto-scrolling {
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}

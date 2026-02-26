@@ -67,13 +67,11 @@ export const Viewer: React.FC = () => {
     // if the store is still processing the loadFile async call.
     const [isOpening, setIsOpening] = React.useState(true);
 
-    // Fade out UI initially after loaded
+    // Fade out UI initially after loaded, but do NOT auto-hide it. Wait for user tap.
     useEffect(() => {
         if (file) {
             setIsOpening(false);
-            setShowUI(true);
-            const timer = setTimeout(() => setShowUI(false), 2000);
-            return () => clearTimeout(timer);
+            setShowUI(true); // 初期表示のみ
         }
     }, [file]);
 
@@ -87,8 +85,6 @@ export const Viewer: React.FC = () => {
     // Redirect if no file loaded and we're definitely not opening or loading
     useEffect(() => {
         if (!file && !isLoading) {
-            // Give it a tiny delay to ensure we don't flash back to home instantly
-            // if store takes a split second to set isLoading=true
             const t = setTimeout(() => {
                 navigate('/');
             }, 100);
@@ -110,8 +106,109 @@ export const Viewer: React.FC = () => {
         axis: 'x',
     });
 
+    // ==== Auto-Scroll Feature States & Refs ====
+    const [isAutoScrolling, setIsAutoScrolling] = React.useState(false);
+    const [scrollAnchor, setScrollAnchor] = React.useState<{ x: number; y: number } | null>(null);
+    const autoScrollRef = React.useRef({
+        timer: null as ReturnType<typeof setTimeout> | null,
+        anchor: null as { x: number; y: number } | null,
+        currentY: 0,
+        isScrolling: false,
+        animationFrame: null as number | null,
+        didMoveFar: false // 長押し前に指が大きく動いたらキャンセル
+    });
+
+    const scrollLoop = React.useCallback(() => {
+        const state = autoScrollRef.current;
+        if (!state.isScrolling || !state.anchor) return;
+
+        // アンカーと現在の指（マウスポインタ）の距離を計算
+        const dy = state.currentY - state.anchor.y;
+        
+        // 遊び(デッドゾーン)を少し設ける（半径20px以内はスクロールしない）
+        if (Math.abs(dy) > 20) {
+            // 距離に応じて速度(px/frame)を決定。係数0.05くらいで調整。
+            const speed = (dy - (dy > 0 ? 20 : -20)) * 0.15;
+            
+            // 縦スクロール用のコンテナを取得してスクロール
+            const container = document.querySelector('.vertical-scroll-wrapper') as HTMLElement;
+            if (container) {
+                container.scrollBy({ top: speed, behavior: 'auto' });
+            }
+        }
+
+        state.animationFrame = requestAnimationFrame(scrollLoop);
+    }, []);
+
+    const stopAutoScroll = React.useCallback(() => {
+        const state = autoScrollRef.current;
+        if (state.timer) clearTimeout(state.timer);
+        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+        state.timer = null;
+        state.isScrolling = false;
+        state.anchor = null;
+        setIsAutoScrolling(false);
+        setScrollAnchor(null);
+    }, []);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if (viewMode !== 'vertical') return;
+        // 左クリックまたは通常タッチ以外は無視
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        const state = autoScrollRef.current;
+        state.didMoveFar = false;
+        state.anchor = { x: e.clientX, y: e.clientY };
+        state.currentY = e.clientY;
+
+        // 500ms 後に長押し判定
+        state.timer = setTimeout(() => {
+            if (!state.didMoveFar) {
+                state.isScrolling = true;
+                setIsAutoScrolling(true);
+                setScrollAnchor(state.anchor);
+                state.animationFrame = requestAnimationFrame(scrollLoop);
+            }
+        }, 500);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (viewMode !== 'vertical') return;
+        const state = autoScrollRef.current;
+        
+        if (state.anchor) {
+            // まだ長押し判定前の場合、大きく動いたら長押しをキャンセル
+            if (!state.isScrolling) {
+                const dist = Math.abs(e.clientY - state.anchor.y) + Math.abs(e.clientX - state.anchor.x);
+                if (dist > 15) {
+                    state.didMoveFar = true;
+                    if (state.timer) clearTimeout(state.timer);
+                    state.anchor = null;
+                }
+            } else {
+                // スクロール発動中は座標を更新
+                state.currentY = e.clientY;
+            }
+        }
+    };
+
+    const handlePointerUp = () => {
+        stopAutoScroll();
+    };
+
+    // ==== Handle Clicks ====
     const handleZoneClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const state = autoScrollRef.current;
+
+        // オートスクロールが終わった直後のクリック（mouseupによる）はUIトグルを発動させない
+        if (state.isScrolling || state.didMoveFar) {
+            state.didMoveFar = false; // Reset
+            return; 
+        }
+
         if (viewMode === 'vertical') {
+            // UI上のボタン（mode-toggleやclose）をクリックした場合は反応させない
+            if ((e.target as HTMLElement).closest('.viewer-controls')) return;
             toggleUI();
             return;
         }
@@ -166,7 +263,15 @@ export const Viewer: React.FC = () => {
     const currentUrl = pageUrls[currentPageIndex];
 
     return (
-        <div className={`viewer-container ${viewMode === 'vertical' ? 'vertical-mode' : ''}`} {...(viewMode === 'horizontal' ? bind() : {})} onClick={handleZoneClick}>
+        <div 
+            className={`viewer-container ${viewMode === 'vertical' ? 'vertical-mode' : ''} ${isAutoScrolling ? 'auto-scrolling' : ''}`} 
+            {...(viewMode === 'horizontal' ? bind() : {})} 
+            onClick={handleZoneClick}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+        >
             
             <div className={`viewer-ui-overlay ${showUI ? 'visible' : ''}`}>
                 <div className="viewer-controls">
@@ -180,6 +285,19 @@ export const Viewer: React.FC = () => {
                     {file.fileName} - {currentPageIndex + 1} / {file.totalPages}
                 </div>
             </div>
+
+            {/* Auto-Scroll Anchor UI */}
+            {isAutoScrolling && scrollAnchor && (
+                <div 
+                    className="auto-scroll-anchor"
+                    style={{
+                        left: scrollAnchor.x,
+                        top: scrollAnchor.y,
+                    }}
+                >
+                    <div className="auto-scroll-anchor-inner" />
+                </div>
+            )}
 
             {viewMode === 'horizontal' ? (
                 <div className="image-container">
