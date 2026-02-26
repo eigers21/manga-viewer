@@ -129,7 +129,10 @@
     height: auto;
     object-fit: contain;
     display: block;
-    /* 余白排除 */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
 }
 
 .vertical-page-placeholder {

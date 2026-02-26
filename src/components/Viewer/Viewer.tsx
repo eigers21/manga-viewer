@@ -46,6 +46,7 @@ const VerticalPage: React.FC<{ index: number; url?: string; setPage: (idx: numbe
                     className="vertical-page-image"
                     loading="lazy"
                     onLoad={handleImageLoad}
+                    draggable={false}
                 />
             ) : (
                 <div className="vertical-page-placeholder">
@@ -152,7 +153,6 @@ export const Viewer: React.FC = () => {
     }, []);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        if (viewMode !== 'vertical') return;
         // 左クリックまたは通常タッチ以外は無視
         if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -173,7 +173,6 @@ export const Viewer: React.FC = () => {
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
-        if (viewMode !== 'vertical') return;
         const state = autoScrollRef.current;
         
         if (state.anchor) {
@@ -267,10 +266,6 @@ export const Viewer: React.FC = () => {
             className={`viewer-container ${viewMode === 'vertical' ? 'vertical-mode' : ''} ${isAutoScrolling ? 'auto-scrolling' : ''}`} 
             {...(viewMode === 'horizontal' ? bind() : {})} 
             onClick={handleZoneClick}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
         >
             
             <div className={`viewer-ui-overlay ${showUI ? 'visible' : ''}`}>
@@ -313,7 +308,18 @@ export const Viewer: React.FC = () => {
                     )}
                 </div>
             ) : (
-                <div className="vertical-scroll-wrapper">
+                <div 
+                    className="vertical-scroll-wrapper"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
+                    onContextMenu={(e) => {
+                        // オートスクロール中に限らず、長押しで画像保存メニュー等が出るのを防ぐ
+                        e.preventDefault();
+                    }}
+                >
                     {Array.from({ length: file.totalPages }).map((_, i) => (
                         <div key={i} id={`vertical-page-${i}`}>
                             <VerticalPage
