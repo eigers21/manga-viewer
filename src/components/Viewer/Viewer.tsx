@@ -34,7 +34,10 @@ const VerticalPage: React.FC<{ index: number; url?: string; setPage: (idx: numbe
         <div
             ref={ref}
             className="vertical-page-container"
-            style={{ minHeight: pageHeight ? `${pageHeight}px` : '50vh' }}
+            style={{
+                height: pageHeight ? `${pageHeight}px` : 'auto',
+                minHeight: pageHeight ? undefined : '50vh'
+            }}
         >
             {url ? (
                 <img
