@@ -120,6 +120,26 @@ export const Viewer: React.FC = () => {
         didMoveFar: false // 長押し前に指が大きく動いたらキャンセル
     });
 
+    // スマホにおいて、長押し後(= isScrollingがtrue)に指を動かしたときに
+    // ネイティブのスクロールが巻き込まれて動いてしまうのを防ぐ（passive: false で preventDefault する）
+    useEffect(() => {
+        const wrapper = scrollWrapperRef.current;
+        if (!wrapper) return;
+
+        const preventNativeScroll = (e: TouchEvent) => {
+            if (autoScrollRef.current.isScrolling) {
+                e.preventDefault();
+            }
+        };
+
+        // passive: false でリスナー登録
+        wrapper.addEventListener('touchmove', preventNativeScroll, { passive: false });
+        
+        return () => {
+            wrapper.removeEventListener('touchmove', preventNativeScroll);
+        };
+    }, []);
+
     const scrollLoop = React.useCallback(() => {
         const state = autoScrollRef.current;
         if (!state.isScrolling || !state.anchor) return;
@@ -326,8 +346,8 @@ export const Viewer: React.FC = () => {
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
-                    onPointerLeave={handlePointerUp}
                     onPointerCancel={handlePointerUp}
+                    onDragStart={(e) => e.preventDefault()}
                     onContextMenu={(e) => {
                         // オートスクロール中に限らず、長押しで画像保存メニュー等が出るのを防ぐ
                         e.preventDefault();
