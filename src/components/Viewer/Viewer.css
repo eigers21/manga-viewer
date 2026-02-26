@@ -144,50 +144,63 @@
     color: rgba(255, 255, 255, 0.3);
     background: rgba(255, 255, 255, 0.02);
 }
-/* Auto-Scroll Anchor UI */
-.auto-scroll-anchor {
+/* Auto-Scroll Dedicated Joystick Pad */
+.joystick-pad {
     position: fixed;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.3);
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    transform: translate(-50%, -50%); /* 中心をマウスポインタの座標に合わせる */
-    pointer-events: none;
-    z-index: 50;
+    right: 20px;
+    bottom: 80px;
+    width: 60px;
+    height: 140px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 30px;
+    z-index: 999;
+    backdrop-filter: blur(4px);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(2px);
-    animation: fadeInAnchor 0.2s ease-out;
-}
-
-.auto-scroll-anchor-inner {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: white;
-}
-
-@keyframes fadeInAnchor {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-/* スクロール発動中はユーザー選択やデフォルトのドラッグ挙動を無効化する */
-.viewer-container.auto-scrolling {
+    
+    /* 魔法の呪文: これによりOSやブラウザのネイティブスクロール・戻るジェスチャー等の介入を100%防ぎ、純粋なポインタイベントにできる */
+    touch-action: none !important;
     user-select: none;
     -webkit-user-select: none;
-    touch-action: none;
-}
-
-/* 発動中、画面全体を覆ってイベントを取りこぼさない透過シールド */
-.auto-scroll-active-shield {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
+    -webkit-touch-callout: none;
     cursor: ns-resize;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none; /* スマホのスクロールを完全に無効化 */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.3s ease;
+}
+
+.joystick-pad.active {
+    background: rgba(0, 0, 0, 0.7);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.joystick-thumb {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transition: transform 0.05s linear;
+    pointer-events: none; /* 親のジョイスティックパッドにイベントを吸わせる */
+}
+
+.joystick-pad.active .joystick-thumb {
+    background: #fff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.joystick-label {
+    position: absolute;
+    bottom: -20px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+    font-weight: bold;
+    letter-spacing: 1px;
 }

@@ -110,65 +110,30 @@ export const Viewer: React.FC = () => {
     // ==== Auto-Scroll Feature States & Refs ====
     const scrollWrapperRef = React.useRef<HTMLDivElement>(null);
     const [isAutoScrolling, setIsAutoScrolling] = React.useState(false);
-    const [scrollAnchor, setScrollAnchor] = React.useState<{ x: number; y: number } | null>(null);
+    const [dragOffset, setDragOffset] = React.useState(0);
+    
     const autoScrollRef = React.useRef({
-        timer: null as ReturnType<typeof setTimeout> | null,
-        anchor: null as { x: number; y: number } | null,
+        startY: 0,
         currentY: 0,
         isScrolling: false,
         animationFrame: null as number | null,
-        
-        // 誤タップ防止用フラグ
-        preventNextClick: false,
-
-        // グローバルリスナー管理用
-        onMove: null as ((e: PointerEvent) => void) | null,
-        onUp: null as ((e: PointerEvent) => void) | null,
-        onTouchMove: null as ((e: TouchEvent) => void) | null,
     });
-
-    const stopAutoScroll = React.useCallback(() => {
-        const state = autoScrollRef.current;
-        const wasScrolling = state.isScrolling;
-
-        if (state.timer) clearTimeout(state.timer);
-        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
-        state.timer = null;
-        state.isScrolling = false;
-        state.anchor = null;
-        setIsAutoScrolling(false);
-        setScrollAnchor(null);
-
-        if (wasScrolling) {
-            state.preventNextClick = true;
-            setTimeout(() => { state.preventNextClick = false; }, 300);
-        }
-
-        if (state.onMove) window.removeEventListener('pointermove', state.onMove);
-        if (state.onUp) {
-            window.removeEventListener('pointerup', state.onUp);
-            window.removeEventListener('pointercancel', state.onUp);
-        }
-        if (state.onTouchMove) window.removeEventListener('touchmove', state.onTouchMove);
-
-        state.onMove = null;
-        state.onUp = null;
-        state.onTouchMove = null;
-    }, []);
 
     const scrollLoop = React.useCallback(() => {
         const state = autoScrollRef.current;
-        if (!state.isScrolling || !state.anchor) return;
+        if (!state.isScrolling) return;
 
-        // アンカーと現在の指（マウスポインタ）の距離を計算
-        const dy = state.currentY - state.anchor.y;
+        // アンカー（押し始めY）と現在の指の距離
+        const dy = state.currentY - state.startY;
         
-        // 遊び(デッドゾーン)を少し設ける（半径20px以内はスクロールしない）
-        if (Math.abs(dy) > 20) {
-            // 距離に応じて速度(px/frame)を決定。係数0.05くらいで調整。
-            const speed = (dy - (dy > 0 ? 20 : -20)) * 0.15;
+        // UIに反映するためのオフセット
+        setDragOffset(dy);
+        
+        // 遊び(デッドゾーン)を少し設ける（半径15px以内はスクロールしない）
+        if (Math.abs(dy) > 15) {
+            // 距離に応じて速度(px/frame)を決定。
+            const speed = (dy - (dy > 0 ? 15 : -15)) * 0.15;
             
-            // 縦スクロール用のコンテナを取得してスクロール
             const container = scrollWrapperRef.current;
             if (container) {
                 container.scrollBy({ top: speed, behavior: 'auto' });
@@ -178,74 +143,63 @@ export const Viewer: React.FC = () => {
         state.animationFrame = requestAnimationFrame(scrollLoop);
     }, []);
 
-    const handlePointerDown = (e: React.PointerEvent) => {
-        if (viewMode !== 'vertical') return;
-        // 左クリックまたは通常タッチ以外は無視
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const stopAutoScroll = React.useCallback(() => {
+        const state = autoScrollRef.current;
+        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+        state.isScrolling = false;
+        setIsAutoScrolling(false);
+        setDragOffset(0);
+    }, []);
 
-        // 既存のプロセスがあればリセット
-        stopAutoScroll();
+    const handleJoystickDown = (e: React.PointerEvent) => {
+        // Only react to primary touch/mouse button
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        
+        // This is the magic that takes 100% control of the pointer
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
         const state = autoScrollRef.current;
-        state.anchor = { x: e.clientX, y: e.clientY };
+        if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+        
+        state.isScrolling = true;
+        state.startY = e.clientY;
         state.currentY = e.clientY;
+        
+        setIsAutoScrolling(true);
+        setDragOffset(0);
+        
+        state.animationFrame = requestAnimationFrame(scrollLoop);
+    };
 
-        // グローバルイベントで動きと離上を監視
-        const onMove = (ev: PointerEvent) => {
-            if (!state.anchor) return;
-            if (!state.isScrolling) {
-                // 長押し判定前に動いたらキャンセル
-                const dist = Math.abs(ev.clientY - state.anchor.y) + Math.abs(ev.clientX - state.anchor.x);
-                if (dist > 15) {
-                    stopAutoScroll();
-                }
-            } else {
-                state.currentY = ev.clientY;
-            }
-        };
+    const handleJoystickMove = (e: React.PointerEvent) => {
+        const state = autoScrollRef.current;
+        if (state.isScrolling) {
+            state.currentY = e.clientY;
+        }
+    };
 
-        const onTouchMove = (ev: TouchEvent) => {
-            // スマホ等で発動中のブラウザスクロールをブロック
-            if (state.isScrolling && ev.cancelable) {
-                ev.preventDefault();
-            }
-        };
-
-        const onUp = () => {
-            stopAutoScroll();
-        };
-
-        state.onMove = onMove;
-        state.onUp = onUp;
-        state.onTouchMove = onTouchMove;
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
-        window.addEventListener('pointercancel', onUp);
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-
-        // 500ms 後に長押し判定
-        state.timer = setTimeout(() => {
-            // もし指が動いてキャンセルされていなければ発動
-            if (state.anchor) {
-                state.isScrolling = true;
-                setIsAutoScrolling(true);
-                setScrollAnchor(state.anchor);
-                state.animationFrame = requestAnimationFrame(scrollLoop);
-            }
-        }, 500);
+    const handleJoystickUp = (e: React.PointerEvent) => {
+        try {
+            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+            // ignore error
+        }
+        stopAutoScroll();
     };
 
     // ==== Handle Clicks ====
     const handleZoneClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const state = autoScrollRef.current;
 
-        // オートスクロール終了直後のクリックや長押し発動中はUIをトグルさせない
-        if (state.preventNextClick || state.isScrolling) return;
+        // もしジョイスティック操作直後のイベント伝播なら防止
+        if (state.isScrolling) return;
 
         if (viewMode === 'vertical') {
             // UI上のボタン（mode-toggleやclose）をクリックした場合は反応させない
             if ((e.target as HTMLElement).closest('.viewer-controls')) return;
+            // ジョイスティッククリックも無視
+            if ((e.target as HTMLElement).closest('.joystick-pad')) return;
+            
             toggleUI();
             return;
         }
@@ -319,15 +273,21 @@ export const Viewer: React.FC = () => {
                 </div>
             </div>
 
-            {/* Auto-Scroll Anchor */}
-            {isAutoScrolling && scrollAnchor && (
+            {/* Dedicated Auto-Scroll Joystick (Vertical mode only) */}
+            {viewMode === 'vertical' && (!showUI ? null : (
                 <div 
-                    className="auto-scroll-anchor"
-                    style={{ left: scrollAnchor.x, top: scrollAnchor.y }}
+                    className={`joystick-pad ${isAutoScrolling ? 'active' : ''}`}
+                    onPointerDown={handleJoystickDown}
+                    onPointerMove={handleJoystickMove}
+                    onPointerUp={handleJoystickUp}
+                    onPointerCancel={handleJoystickUp}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onDragStart={(e) => e.preventDefault()}
                 >
-                    <div className="auto-scroll-anchor-inner" />
+                    <div className="joystick-thumb" style={{ transform: `translate(-50%, calc(-50% + ${Math.min(Math.max(dragOffset, -40), 40)}px))` }} />
+                    <div className="joystick-label">SCROLL</div>
                 </div>
-            )}
+            ))}
 
             {viewMode === 'horizontal' ? (
                 <div className="image-container">
@@ -346,12 +306,6 @@ export const Viewer: React.FC = () => {
                 <div 
                     ref={scrollWrapperRef}
                     className="vertical-scroll-wrapper"
-                    onPointerDown={handlePointerDown}
-                    onDragStart={(e) => e.preventDefault()}
-                    onContextMenu={(e) => {
-                        // iOS/Androidで長押ししたときの「画像を保存」等を無効化する
-                        e.preventDefault();
-                    }}
                 >
                     {Array.from({ length: file.totalPages }).map((_, i) => (
                         <div key={i} id={`vertical-page-${i}`}>
