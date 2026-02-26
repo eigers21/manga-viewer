@@ -16,7 +16,7 @@ interface ViewerState {
     viewMode: 'horizontal' | 'vertical';
 
     // Actions
-    loadFile: (file: Blob) => Promise<void>;
+    loadFile: (file: Blob, fileName?: string) => Promise<void>;
     closeFile: () => void;
     setPage: (index: number) => void;
     nextPage: () => void;
@@ -38,14 +38,15 @@ export const useStore = create<ViewerState>((set, get) => ({
     currentFileId: null,
     viewMode: (localStorage.getItem('viewer_viewMode') as 'horizontal' | 'vertical') || 'horizontal',
 
-    loadFile: async (file: Blob) => {
+    loadFile: async (file: Blob, fileName?: string) => {
         // 古いURLを解放
         const { pageUrls, currentFileId } = get();
         Object.values(pageUrls).forEach(url => URL.revokeObjectURL(url));
 
         set({ isLoading: true, error: null, pageUrls: {} });
         try {
-            const mangaFile = await fileLoader.loadFile(file, currentFileId || undefined);
+            const actualFileName = fileName || (file as File).name || currentFileId || undefined;
+            const mangaFile = await fileLoader.loadFile(file, actualFileName);
 
             // 栞（しおり）機能：保存されたページインデックスを復元
             const fileKey = currentFileId || mangaFile.fileName;

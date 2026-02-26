@@ -66,12 +66,12 @@ export const Library: React.FC = () => {
         await googleDriveService.login();
     };
 
-    const handleCloudFileClick = async (fileId: string) => {
+    const handleCloudFileClick = async (fileId: string, fileName: string) => {
         setLoadingCloud(true);
         try {
             const blob = await googleDriveService.downloadFile(fileId);
             setCurrentFileId(fileId);
-            await loadFile(blob);
+            await loadFile(blob, fileName);
             navigate('/viewer');
         } catch (e) {
             console.error('ダウンロード失敗:', e);
@@ -125,7 +125,7 @@ export const Library: React.FC = () => {
                 setCurrentFileId(item.id);
                 // キャッシュに登録（上限超えならスキップ）
                 await cacheService.registerFile(item.id, item.name, 0, blob.size);
-                await loadFile(blob);
+                await loadFile(blob, item.name);
                 navigate('/viewer');
             } catch (e) {
                 console.error('BOXダウンロード失敗:', e);
@@ -165,7 +165,7 @@ export const Library: React.FC = () => {
         const file = event.target.files?.[0];
         if (file) {
             setCurrentFileId(file.name);
-            await loadFile(file);
+            await loadFile(file, file.name);
             navigate('/viewer');
         }
     };
@@ -285,7 +285,7 @@ export const Library: React.FC = () => {
                                 {cloudFiles.length === 0 ? <p>No ZIP/CBZ files found.</p> : (
                                     <ul>
                                         {cloudFiles.map(file => (
-                                            <li key={file.id} onClick={() => handleCloudFileClick(file.id)}>
+                                            <li key={file.id} onClick={() => handleCloudFileClick(file.id, file.name)}>
                                                 {file.name}
                                             </li>
                                         ))}
