@@ -120,26 +120,6 @@ export const Viewer: React.FC = () => {
         didMoveFar: false // 長押し前に指が大きく動いたらキャンセル
     });
 
-    // スマホにおいて、長押し後(= isScrollingがtrue)に指を動かしたときに
-    // ネイティブのスクロールが巻き込まれて動いてしまうのを防ぐ（passive: false で preventDefault する）
-    useEffect(() => {
-        const wrapper = scrollWrapperRef.current;
-        if (!wrapper) return;
-
-        const preventNativeScroll = (e: TouchEvent) => {
-            if (autoScrollRef.current.isScrolling) {
-                e.preventDefault();
-            }
-        };
-
-        // passive: false でリスナー登録
-        wrapper.addEventListener('touchmove', preventNativeScroll, { passive: false });
-        
-        return () => {
-            wrapper.removeEventListener('touchmove', preventNativeScroll);
-        };
-    }, []);
-
     const scrollLoop = React.useCallback(() => {
         const state = autoScrollRef.current;
         if (!state.isScrolling || !state.anchor) return;
@@ -174,10 +154,9 @@ export const Viewer: React.FC = () => {
     }, []);
 
     const handlePointerDown = (e: React.PointerEvent) => {
+        if (viewMode !== 'vertical') return;
         // 左クリックまたは通常タッチ以外は無視
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
         const state = autoScrollRef.current;
         if (state.timer) clearTimeout(state.timer);
@@ -199,31 +178,42 @@ export const Viewer: React.FC = () => {
         }, 500);
     };
 
-    const handlePointerMove = (e: React.PointerEvent) => {
+    // 発動前の「指が大きく動いたか」の判定用（コンテナに付与）
+    const handlePointerMoveInit = (e: React.PointerEvent) => {
+        if (viewMode !== 'vertical') return;
         const state = autoScrollRef.current;
         
-        if (state.anchor) {
-            // まだ長押し判定前の場合、大きく動いたら長押しをキャンセル
-            if (!state.isScrolling) {
-                const dist = Math.abs(e.clientY - state.anchor.y) + Math.abs(e.clientX - state.anchor.x);
-                if (dist > 15) {
-                    state.didMoveFar = true;
-                    if (state.timer) clearTimeout(state.timer);
-                    state.anchor = null;
-                }
-            } else {
-                // スクロール発動中は座標を更新
-                state.currentY = e.clientY;
+        if (state.anchor && !state.isScrolling) {
+            const dist = Math.abs(e.clientY - state.anchor.y) + Math.abs(e.clientX - state.anchor.x);
+            if (dist > 15) {
+                state.didMoveFar = true;
+                if (state.timer) clearTimeout(state.timer);
+                state.anchor = null;
             }
         }
     };
 
-    const handlePointerUp = (e: React.PointerEvent) => {
-        try {
-            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-        } catch {
-            // ignore error
+    // 発動後の追従用（シールド・オーバーレイに付与）
+    const handlePointerMoveActive = (e: React.PointerEvent) => {
+        // デフォルトアクションを止める（スマホのスクロール防止）
+        e.preventDefault();
+        const state = autoScrollRef.current;
+        if (state.isScrolling) {
+            state.currentY = e.clientY;
         }
+    };
+
+    const handlePointerUpInit = () => {
+        // 発動前に指を離したらキャンセル
+        const state = autoScrollRef.current;
+        if (state.timer) clearTimeout(state.timer);
+        if (!state.isScrolling) {
+            state.anchor = null;
+        }
+    };
+
+    const handlePointerUpActive = (e: React.PointerEvent) => {
+        e.preventDefault();
         stopAutoScroll();
     };
 
@@ -313,17 +303,25 @@ export const Viewer: React.FC = () => {
                 </div>
             </div>
 
-            {/* Auto-Scroll Anchor UI */}
+            {/* Auto-Scroll Anchor & Invisible Overlay Shield */}
             {isAutoScrolling && scrollAnchor && (
-                <div 
-                    className="auto-scroll-anchor"
-                    style={{
-                        left: scrollAnchor.x,
-                        top: scrollAnchor.y,
-                    }}
-                >
-                    <div className="auto-scroll-anchor-inner" />
-                </div>
+                <>
+                    <div 
+                        className="auto-scroll-anchor"
+                        style={{ left: scrollAnchor.x, top: scrollAnchor.y }}
+                    >
+                        <div className="auto-scroll-anchor-inner" />
+                    </div>
+                    {/* この透明オーバーレイが画面全体を覆い、他の全ての要素へのタッチ・マウスを遮断して100%追従させる */}
+                    <div 
+                        className="auto-scroll-active-shield"
+                        onPointerMove={handlePointerMoveActive}
+                        onPointerUp={handlePointerUpActive}
+                        onPointerCancel={handlePointerUpActive}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onDragStart={(e) => e.preventDefault()}
+                    />
+                </>
             )}
 
             {viewMode === 'horizontal' ? (
@@ -344,12 +342,12 @@ export const Viewer: React.FC = () => {
                     ref={scrollWrapperRef}
                     className="vertical-scroll-wrapper"
                     onPointerDown={handlePointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
+                    onPointerMove={handlePointerMoveInit}
+                    onPointerUp={handlePointerUpInit}
+                    onPointerCancel={handlePointerUpInit}
                     onDragStart={(e) => e.preventDefault()}
                     onContextMenu={(e) => {
-                        // オートスクロール中に限らず、長押しで画像保存メニュー等が出るのを防ぐ
+                        // iOS/Androidで長押ししたときの「画像を保存」等を無効化する
                         e.preventDefault();
                     }}
                 >

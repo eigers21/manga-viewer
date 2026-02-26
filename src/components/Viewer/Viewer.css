@@ -180,3 +180,14 @@
     -webkit-user-select: none;
     touch-action: none;
 }
+
+/* 発動中、画面全体を覆ってイベントを取りこぼさない透過シールド */
+.auto-scroll-active-shield {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    cursor: ns-resize;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none; /* スマホのスクロールを完全に無効化 */
+}
