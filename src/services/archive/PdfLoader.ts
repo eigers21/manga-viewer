@@ -1,8 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import type { MangaFile } from '../../types';
 
-// PDF.js worker config using CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.mjs`;
+// PDF.js worker config using local bundled worker via Vite
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export class PdfLoader {
     private pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
