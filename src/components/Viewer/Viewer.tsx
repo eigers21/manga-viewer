@@ -9,9 +9,12 @@ import './Viewer.css';
 // 縦読み用のページコンポーネント
 const VerticalPage: React.FC<{ index: number; url?: string; setPage: (idx: number) => void }> = ({ index, url, setPage }) => {
     const { ref, inView } = useInView({
-        threshold: 0.1, // 10%表示されたら検知（早めにロードや位置更新させるため）
-        rootMargin: '50% 0px', // 少し広めにマージンを取る
+        threshold: 0.1, // 10%表示されたら検知
+        rootMargin: '50% 0px',
     });
+
+    // 各ページの「本来の高さ」を保持する
+    const [pageHeight, setPageHeight] = React.useState<number | undefined>(undefined);
 
     useEffect(() => {
         if (inView) {
@@ -19,10 +22,28 @@ const VerticalPage: React.FC<{ index: number; url?: string; setPage: (idx: numbe
         }
     }, [inView, index, setPage]);
 
+    const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        // 画像がロードされたらその実寸サイズ（描画サイズ）をもとに高さを固定する
+        const height = e.currentTarget.getBoundingClientRect().height;
+        if (height > 0) {
+            setPageHeight(height);
+        }
+    };
+
     return (
-        <div ref={ref} className="vertical-page-container">
+        <div
+            ref={ref}
+            className="vertical-page-container"
+            style={{ minHeight: pageHeight ? `${pageHeight}px` : '50vh' }}
+        >
             {url ? (
-                <img src={url} alt={`Page ${index + 1}`} className="vertical-page-image" loading="lazy" />
+                <img
+                    src={url}
+                    alt={`Page ${index + 1}`}
+                    className="vertical-page-image"
+                    loading="lazy"
+                    onLoad={handleImageLoad}
+                />
             ) : (
                 <div className="vertical-page-placeholder">
                     <span>Loading Page {index + 1}...</span>

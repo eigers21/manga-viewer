@@ -10,8 +10,7 @@ const META_KEY = '__cache_meta__';
 interface CachedFileMeta {
     fileId: string;
     fileName: string;
-    totalPages: number;
-    totalSize: number; // 全ページの合計バイト数
+    totalSize: number; // 全体バイト数
     lastAccessed: number; // タイムスタンプ
 }
 
@@ -21,8 +20,8 @@ interface CacheMeta {
 }
 
 /**
- * IndexedDBを使ったページキャッシュサービス。
- * キー: "page:{fileId}:{pageIndex}" → 値: Blob
+ * IndexedDBを使ったファイル単位のキャッシュサービス。
+ * キー: "file:{fileId}" → 値: Blob
  * メタデータ: "__cache_meta__" → CacheMeta
  */
 export class CacheService {
@@ -37,9 +36,9 @@ export class CacheService {
         await set(META_KEY, meta);
     }
 
-    /** ページキーを生成 */
-    private pageKey(fileId: string, pageIndex: number): string {
-        return `page:${fileId}:${pageIndex}`;
+    /** ファイル全体のキーを生成 */
+    private fileKey(fileId: string): string {
+        return `file:${fileId}`;
     }
 
     /** キャッシュ済みかチェック */
@@ -48,9 +47,9 @@ export class CacheService {
         return meta.files.some(f => f.fileId === fileId);
     }
 
-    /** キャッシュからページを取得 */
-    async getPage(fileId: string, pageIndex: number): Promise<Blob | null> {
-        const blob = await get<Blob>(this.pageKey(fileId, pageIndex));
+    /** キャッシュからファイル全体を取得 */
+    async getFile(fileId: string): Promise<Blob | null> {
+        const blob = await get<Blob>(this.fileKey(fileId));
         if (blob) {
             // 最終アクセス日を更新
             const meta = await this.getMeta();
@@ -63,17 +62,10 @@ export class CacheService {
         return blob || null;
     }
 
-    /** ページをキャッシュに保存 */
-    async savePage(fileId: string, pageIndex: number, blob: Blob): Promise<void> {
-        await set(this.pageKey(fileId, pageIndex), blob);
-    }
+    /** ファイル全体をキャッシュに保存 */
+    async saveFile(fileId: string, fileName: string, blob: Blob): Promise<boolean> {
+        const estimatedSize = blob.size;
 
-    /**
-     * ファイルのメタデータを登録。
-     * 上限を超える場合は古いファイルから削除して空きを作る。
-     * ファイル単体が上限を超える場合はキャッシュしない（falseを返す）。
-     */
-    async registerFile(fileId: string, fileName: string, totalPages: number, estimatedSize: number): Promise<boolean> {
         // ファイル単体が上限を超える場合はキャッシュしない
         if (estimatedSize > CACHE_LIMIT_BYTES) {
             console.log(`ファイル "${fileName}" (${(estimatedSize / 1024 / 1024).toFixed(1)}MB) はキャッシュ上限を超えるためスキップ`);
@@ -82,27 +74,40 @@ export class CacheService {
 
         const meta = await this.getMeta();
 
-        // 既にキャッシュ済みの場合は最終アクセスを更新
+        // 既にキャッシュ済みの場合は内容と時間を更新
         const existing = meta.files.find(f => f.fileId === fileId);
         if (existing) {
             existing.lastAccessed = Date.now();
-            await this.saveMeta(meta);
-            return true;
+            existing.totalSize = estimatedSize;
+        } else {
+            // 空き容量を確保（古いファイルから削除）
+            await this.evictIfNeeded(meta, estimatedSize);
+
+            // メタデータに追加
+            meta.files.push({
+                fileId,
+                fileName,
+                totalSize: estimatedSize,
+                lastAccessed: Date.now(),
+            });
         }
 
-        // 空き容量を確保（古いファイルから削除）
-        await this.evictIfNeeded(meta, estimatedSize);
-
-        // メタデータに追加
-        meta.files.push({
-            fileId,
-            fileName,
-            totalPages,
-            totalSize: estimatedSize,
-            lastAccessed: Date.now(),
-        });
         await this.saveMeta(meta);
+        await set(this.fileKey(fileId), blob);
         return true;
+    }
+
+    /**
+     * ファイルのメタデータを登録 (旧API互換、もう使わないが削除用ロジックのために残すか不要なら消す)。
+     * 代わりに旧ページキャッシュがあった場合のクリーンアップ処理を入れる
+     */
+    async cleanupLegacyPageCache(): Promise<void> {
+        const allKeys = await keys();
+        for (const key of allKeys) {
+            if (typeof key === 'string' && key.startsWith('page:')) {
+                await del(key);
+            }
+        }
     }
 
     /** 容量超過時に古いファイルから削除 */
@@ -120,10 +125,8 @@ export class CacheService {
         for (const file of sorted) {
             if (freed >= needed) break;
 
-            // ページデータを削除
-            for (let i = 0; i < file.totalPages; i++) {
-                await del(this.pageKey(file.fileId, i));
-            }
+            // ファイルデータを削除
+            await del(this.fileKey(file.fileId));
             freed += file.totalSize;
 
             // メタデータから削除
@@ -151,7 +154,7 @@ export class CacheService {
     async clearAll(): Promise<void> {
         const allKeys = await keys();
         for (const key of allKeys) {
-            if (typeof key === 'string' && (key.startsWith('page:') || key === META_KEY)) {
+            if (typeof key === 'string' && (key.startsWith('file:') || key.startsWith('page:') || key === META_KEY)) {
                 await del(key);
             }
         }

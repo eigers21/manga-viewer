@@ -42,8 +42,10 @@ export const Library: React.FC = () => {
             setIsBoxAuth(true);
             fetchBoxFiles('0');
         }
-        // キャッシュ使用量を取得
-        cacheService.getUsageMB().then(mb => setCacheUsageMB(mb));
+        // レガシーキャッシュの消去とキャッシュ使用量を取得
+        cacheService.cleanupLegacyPageCache().then(() => {
+            cacheService.getUsageMB().then(mb => setCacheUsageMB(mb));
+        });
     }, []);
 
     // --- Google Drive ---
@@ -69,7 +71,15 @@ export const Library: React.FC = () => {
     const handleCloudFileClick = async (fileId: string, fileName: string) => {
         setLoadingCloud(true);
         try {
-            const blob = await googleDriveService.downloadFile(fileId);
+            // キャッシュ確認
+            let blob = await cacheService.getFile(fileId);
+
+            if (!blob) {
+                // キャッシュが無ければダウンロード
+                blob = await googleDriveService.downloadFile(fileId);
+                await cacheService.saveFile(fileId, fileName, blob);
+            }
+
             setCurrentFileId(fileId);
             await loadFile(blob, fileName);
             navigate('/viewer');
@@ -117,14 +127,19 @@ export const Library: React.FC = () => {
             setLoadingBox(true);
             setDownloadProgress(0);
             try {
-                const blob = await boxService.downloadFile(item.id, (loaded, total) => {
-                    const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
-                    setDownloadProgress(pct);
-                });
+                // キャッシュ確認
+                let blob = await cacheService.getFile(item.id);
+
+                if (!blob) {
+                    blob = await boxService.downloadFile(item.id, (loaded, total) => {
+                        const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
+                        setDownloadProgress(pct);
+                    });
+                    await cacheService.saveFile(item.id, item.name, blob);
+                }
+
                 setDownloadProgress(100);
                 setCurrentFileId(item.id);
-                // キャッシュに登録（上限超えならスキップ）
-                await cacheService.registerFile(item.id, item.name, 0, blob.size);
                 await loadFile(blob, item.name);
                 navigate('/viewer');
             } catch (e) {

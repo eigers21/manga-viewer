@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { fileLoader } from '../services/archive/FileLoader';
-import { cacheService } from '../services/cache/CacheService';
 
 const BASE_PREFETCH_RANGE = 2; // 先読み/後読みページ数
 const BASE_CLEANUP_DISTANCE = 5; // メモリに保持する距離
@@ -17,31 +16,10 @@ export const usePageLoader = () => {
             if (pageUrls[index]) return; // 読み込み済み
 
             try {
-                // まずキャッシュを確認
-                if (currentFileId) {
-                    const cached = await cacheService.getPage(currentFileId, index);
-                    if (cached) {
-                        const url = URL.createObjectURL(cached);
-                        setPageUrl(index, url);
-                        return;
-                    }
-                }
-
-                // キャッシュになければFileLoaderから展開
+                // キャッシュの仕組みは FileLoader より上でファイル丸ごと持つ形になったため、
+                // ここでは単純に fileLoader からページ（BlobURL）をもらうだけでOK
                 const url = await fileLoader.getPage(index);
                 setPageUrl(index, url);
-
-                // キャッシュに保存（バックグラウンド）
-                if (currentFileId) {
-                    // BlobURLからBlobを取得してキャッシュ
-                    try {
-                        const res = await fetch(url);
-                        const blob = await res.blob();
-                        await cacheService.savePage(currentFileId, index, blob);
-                    } catch {
-                        // キャッシュ保存失敗は無視（表示には影響しない）
-                    }
-                }
             } catch (error) {
                 console.error(`ページ ${index} の読み込み失敗`, error);
             }
