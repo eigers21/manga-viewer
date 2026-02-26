@@ -18,7 +18,7 @@ export class ZipLoader {
 
             // Filter for image files
             const entries = Object.values(this.zip.files).filter(entry => {
-                return !entry.dir && /\.(jpg|jpeg|png|gif|webp)$/i.test(entry.name);
+                return !entry.dir && /\.(jpg|jpeg|png|gif|webp|avif)$/i.test(entry.name);
             });
 
             // Sort naturally (e.g., 1.jpg, 2.jpg, 10.jpg)
