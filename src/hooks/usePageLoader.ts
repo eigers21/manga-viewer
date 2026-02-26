@@ -3,11 +3,11 @@ import { useStore } from '../store/useStore';
 import { zipLoader } from '../services/archive/ZipLoader';
 import { cacheService } from '../services/cache/CacheService';
 
-const PREFETCH_RANGE = 2; // 先読み/後読みページ数
-const CLEANUP_DISTANCE = 5; // メモリに保持する距離
+const BASE_PREFETCH_RANGE = 2; // 先読み/後読みページ数
+const BASE_CLEANUP_DISTANCE = 5; // メモリに保持する距離
 
 export const usePageLoader = () => {
-    const { file, currentPageIndex, pageUrls, setPageUrl, cleanupOldPages, currentFileId } = useStore();
+    const { file, currentPageIndex, pageUrls, setPageUrl, cleanupOldPages, currentFileId, viewMode } = useStore();
 
     useEffect(() => {
         if (!file) return;
@@ -47,17 +47,21 @@ export const usePageLoader = () => {
             }
         };
 
+        // モードごとに先読みとクリーンアップの距離を調整（縦読み時は一度に見える要素が増えるため余裕を持たす）
+        const prefetchRange = viewMode === 'vertical' ? BASE_PREFETCH_RANGE * 2 : BASE_PREFETCH_RANGE;
+        const cleanupDistance = viewMode === 'vertical' ? BASE_CLEANUP_DISTANCE * 2 : BASE_CLEANUP_DISTANCE;
+
         // 1. 現在のページを読み込み
         loadPage(currentPageIndex);
 
         // 2. 周辺ページを先読み
-        for (let i = 1; i <= PREFETCH_RANGE; i++) {
+        for (let i = 1; i <= prefetchRange; i++) {
             loadPage(currentPageIndex + i);
             loadPage(currentPageIndex - i);
         }
 
         // 3. 遠いページをメモリから解放
-        cleanupOldPages(currentPageIndex, CLEANUP_DISTANCE);
+        cleanupOldPages(currentPageIndex, cleanupDistance);
 
-    }, [currentPageIndex, file, pageUrls, setPageUrl, cleanupOldPages, currentFileId]);
+    }, [currentPageIndex, file, pageUrls, setPageUrl, cleanupOldPages, currentFileId, viewMode]);
 };

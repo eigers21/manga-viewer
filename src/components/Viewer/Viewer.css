@@ -22,22 +22,42 @@
     pointer-events: none;
 }
 
-.close-button {
+.viewer-controls {
     position: absolute;
     top: 20px;
     right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 20;
+}
+
+.mode-toggle-button,
+.close-button {
     background: rgba(0, 0, 0, 0.5);
     color: white;
     border: none;
-    border-radius: 50%;
-    width: 40px;
+    border-radius: 20px;
     height: 40px;
-    font-size: 24px;
+    padding: 0 15px;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 20;
+    backdrop-filter: blur(4px);
+    transition: background-color 0.2s;
+}
+
+.close-button {
+    border-radius: 50%;
+    width: 40px;
+    padding: 0;
+    font-size: 24px;
+}
+
+.mode-toggle-button:hover,
+.close-button:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .image-container {
@@ -58,4 +78,40 @@
 
 .loading-spinner {
     color: #fff;
+    padding: 20px;
+}
+
+/* Vertical Scroll Mode */
+.vertical-scroll-wrapper {
+    width: 100%;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.vertical-page-container {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    justify-content: center;
+    min-height: 50vh; /* 高さ0によるカクつきを防ぐ */
+}
+
+.vertical-page-image {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block; /* 余白排除 */
+}
+
+.vertical-page-placeholder {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.02);
 }

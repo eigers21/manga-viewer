@@ -12,6 +12,8 @@ interface ViewerState {
     downloadProgress: number;
     /** 現在開いているファイルのID（キャッシュ用） */
     currentFileId: string | null;
+    /** 閲覧モード（縦・横） */
+    viewMode: 'horizontal' | 'vertical';
 
     // Actions
     loadFile: (file: Blob) => Promise<void>;
@@ -23,6 +25,7 @@ interface ViewerState {
     cleanupOldPages: (currentIndex: number, distance: number) => void;
     setDownloadProgress: (progress: number) => void;
     setCurrentFileId: (id: string | null) => void;
+    setViewMode: (mode: 'horizontal' | 'vertical') => void;
 }
 
 export const useStore = create<ViewerState>((set, get) => ({
@@ -33,6 +36,7 @@ export const useStore = create<ViewerState>((set, get) => ({
     pageUrls: {},
     downloadProgress: -1,
     currentFileId: null,
+    viewMode: (localStorage.getItem('viewer_viewMode') as 'horizontal' | 'vertical') || 'horizontal',
 
     loadFile: async (file: Blob) => {
         // 古いURLを解放
@@ -42,7 +46,7 @@ export const useStore = create<ViewerState>((set, get) => ({
         set({ isLoading: true, error: null, pageUrls: {} });
         try {
             const mangaFile = await zipLoader.loadFile(file);
-            
+
             // 栞（しおり）機能：保存されたページインデックスを復元
             const fileKey = currentFileId || mangaFile.fileName;
             let savedIndex = 0;
@@ -89,7 +93,7 @@ export const useStore = create<ViewerState>((set, get) => ({
         if (!file) return;
         const newIndex = Math.max(0, Math.min(index, file.totalPages - 1));
         set({ currentPageIndex: newIndex });
-        
+
         // 栞の保存
         const fileKey = currentFileId || file.fileName;
         if (fileKey) {
@@ -102,7 +106,7 @@ export const useStore = create<ViewerState>((set, get) => ({
         if (file && currentPageIndex < file.totalPages - 1) {
             const newIndex = currentPageIndex + 1;
             set({ currentPageIndex: newIndex });
-            
+
             // 栞の保存
             const fileKey = currentFileId || file.fileName;
             if (fileKey) {
@@ -116,7 +120,7 @@ export const useStore = create<ViewerState>((set, get) => ({
         if (currentPageIndex > 0) {
             const newIndex = currentPageIndex - 1;
             set({ currentPageIndex: newIndex });
-            
+
             // 栞の保存
             const fileKey = currentFileId || file?.fileName;
             if (fileKey) {
@@ -153,5 +157,10 @@ export const useStore = create<ViewerState>((set, get) => ({
 
     setCurrentFileId: (id: string | null) => {
         set({ currentFileId: id });
+    },
+
+    setViewMode: (mode: 'horizontal' | 'vertical') => {
+        set({ viewMode: mode });
+        localStorage.setItem('viewer_viewMode', mode);
     },
 }));
