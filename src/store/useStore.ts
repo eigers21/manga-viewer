@@ -36,15 +36,29 @@ export const useStore = create<ViewerState>((set, get) => ({
 
     loadFile: async (file: Blob) => {
         // 古いURLを解放
-        const { pageUrls } = get();
+        const { pageUrls, currentFileId } = get();
         Object.values(pageUrls).forEach(url => URL.revokeObjectURL(url));
 
         set({ isLoading: true, error: null, pageUrls: {} });
         try {
             const mangaFile = await zipLoader.loadFile(file);
+            
+            // 栞（しおり）機能：保存されたページインデックスを復元
+            const fileKey = currentFileId || mangaFile.fileName;
+            let savedIndex = 0;
+            if (fileKey) {
+                const stored = localStorage.getItem(`bookmark_${fileKey}`);
+                if (stored) {
+                    const parsed = parseInt(stored, 10);
+                    if (!isNaN(parsed) && parsed >= 0 && parsed < mangaFile.totalPages) {
+                        savedIndex = parsed;
+                    }
+                }
+            }
+
             set({
                 file: mangaFile,
-                currentPageIndex: 0,
+                currentPageIndex: savedIndex,
                 isLoading: false
             });
         } catch (err) {
@@ -71,23 +85,43 @@ export const useStore = create<ViewerState>((set, get) => ({
     },
 
     setPage: (index: number) => {
-        const { file } = get();
+        const { file, currentFileId } = get();
         if (!file) return;
         const newIndex = Math.max(0, Math.min(index, file.totalPages - 1));
         set({ currentPageIndex: newIndex });
+        
+        // 栞の保存
+        const fileKey = currentFileId || file.fileName;
+        if (fileKey) {
+            localStorage.setItem(`bookmark_${fileKey}`, newIndex.toString());
+        }
     },
 
     nextPage: () => {
-        const { currentPageIndex, file } = get();
+        const { currentPageIndex, file, currentFileId } = get();
         if (file && currentPageIndex < file.totalPages - 1) {
-            set({ currentPageIndex: currentPageIndex + 1 });
+            const newIndex = currentPageIndex + 1;
+            set({ currentPageIndex: newIndex });
+            
+            // 栞の保存
+            const fileKey = currentFileId || file.fileName;
+            if (fileKey) {
+                localStorage.setItem(`bookmark_${fileKey}`, newIndex.toString());
+            }
         }
     },
 
     prevPage: () => {
-        const { currentPageIndex } = get();
+        const { currentPageIndex, file, currentFileId } = get();
         if (currentPageIndex > 0) {
-            set({ currentPageIndex: currentPageIndex - 1 });
+            const newIndex = currentPageIndex - 1;
+            set({ currentPageIndex: newIndex });
+            
+            // 栞の保存
+            const fileKey = currentFileId || file?.fileName;
+            if (fileKey) {
+                localStorage.setItem(`bookmark_${fileKey}`, newIndex.toString());
+            }
         }
     },
 

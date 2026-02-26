@@ -70,6 +70,7 @@ export const Library: React.FC = () => {
         setLoadingCloud(true);
         try {
             const blob = await googleDriveService.downloadFile(fileId);
+            setCurrentFileId(fileId);
             await loadFile(blob);
             navigate('/viewer');
         } catch (e) {
@@ -163,6 +164,7 @@ export const Library: React.FC = () => {
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
+            setCurrentFileId(file.name);
             await loadFile(file);
             navigate('/viewer');
         }
@@ -200,52 +202,6 @@ export const Library: React.FC = () => {
             )}
 
             <div className="library-grid">
-                {/* ローカルファイルカード */}
-                <div className="library-card">
-                    <div className="file-input-wrapper">
-                        <div className="icon-placeholder">📂</div>
-                        <h3>Open Local File</h3>
-                        <p>Select .zip or .cbz file from device</p>
-                        <button className="action-button">
-                            {isLoading ? 'Loading...' : 'Choose File'}
-                        </button>
-                        <input
-                            type="file"
-                            accept=".zip,.cbz"
-                            onChange={handleFileChange}
-                            className="hidden-input"
-                            disabled={isLoading || loadingCloud || loadingBox}
-                        />
-                    </div>
-                </div>
-
-                {/* Google Drive カード */}
-                {!isDriveAuth ? (
-                    <div className="library-card" onClick={handleGoogleLogin}>
-                        <div className="icon-placeholder">☁️</div>
-                        <h3>Google Drive</h3>
-                        <p>Connect to view files</p>
-                        <button className="action-button">Connect</button>
-                    </div>
-                ) : (
-                    <div className="library-card active">
-                        <div className="icon-placeholder">Google Drive</div>
-                        {loadingCloud ? <p>Loading files...</p> : (
-                            <div className="cloud-file-list">
-                                {cloudFiles.length === 0 ? <p>No ZIP/CBZ files found.</p> : (
-                                    <ul>
-                                        {cloudFiles.map(file => (
-                                            <li key={file.id} onClick={() => handleCloudFileClick(file.id)}>
-                                                {file.name}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
                 {/* BOX カード */}
                 {!isBoxAuth ? (
                     <div className="library-card" onClick={handleBoxLogin}>
@@ -312,6 +268,52 @@ export const Library: React.FC = () => {
                         )}
                     </div>
                 )}
+
+                {/* Google Drive カード */}
+                {!isDriveAuth ? (
+                    <div className="library-card" onClick={handleGoogleLogin}>
+                        <div className="icon-placeholder">☁️</div>
+                        <h3>Google Drive</h3>
+                        <p>Connect to view files</p>
+                        <button className="action-button">Connect</button>
+                    </div>
+                ) : (
+                    <div className="library-card active">
+                        <div className="icon-placeholder">Google Drive</div>
+                        {loadingCloud ? <p>Loading files...</p> : (
+                            <div className="cloud-file-list">
+                                {cloudFiles.length === 0 ? <p>No ZIP/CBZ files found.</p> : (
+                                    <ul>
+                                        {cloudFiles.map(file => (
+                                            <li key={file.id} onClick={() => handleCloudFileClick(file.id)}>
+                                                {file.name}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ローカルファイルカード */}
+                <div className="library-card">
+                    <div className="file-input-wrapper">
+                        <div className="icon-placeholder">📂</div>
+                        <h3>Open Local File</h3>
+                        <p>Select .zip or .cbz file from device</p>
+                        <button className="action-button">
+                            {isLoading ? 'Loading...' : 'Choose File'}
+                        </button>
+                        <input
+                            type="file"
+                            accept=".zip,.cbz"
+                            onChange={handleFileChange}
+                            className="hidden-input"
+                            disabled={isLoading || loadingCloud || loadingBox}
+                        />
+                    </div>
+                </div>
             </div>
         </div>
     );
